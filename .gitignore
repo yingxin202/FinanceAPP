@@ -1,0 +1,19 @@
+# Build results
+bin/
+obj/
+
+# IDE
+.vs/
+
+# Data files
+TDXExport/
+*.db
+*.db-shm
+*.db-wal
+
+# Archives
+*.rar
+*.zip
+
+# OS
+Thumbs.db
