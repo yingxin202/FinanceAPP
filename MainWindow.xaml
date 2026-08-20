@@ -1,0 +1,582 @@
+<Window x:Class="FinanceAPP.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:sp="clr-namespace:ScottPlot.WPF;assembly=ScottPlot.WPF"
+        xmlns:local="clr-namespace:FinanceAPP"
+        mc:Ignorable="d"
+        Title="股票K线图查看器 - 通达信" Height="750" Width="1200"
+        WindowStartupLocation="CenterScreen"
+        Background="#1E1E2E">
+    <Window.Resources>
+        <Style x:Key="QuickBtn" TargetType="Button">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Padding" Value="10,4"/>
+            <Setter Property="Background" Value="#313244"/>
+            <Setter Property="Foreground" Value="#CDD6F4"/>
+            <Setter Property="BorderBrush" Value="#45475A"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#45475A"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- 酷炫 TabControl 样式 -->
+        <Style TargetType="TabControl">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+        </Style>
+
+        <!-- TabItem 样式 -->
+        <Style TargetType="TabItem">
+            <Setter Property="Foreground" Value="#A6ADC8"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Margin" Value="2,0,2,0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabItem">
+                        <Grid>
+                            <Border x:Name="TabBg"
+                                    Background="Transparent"
+                                    CornerRadius="8,8,0,0"
+                                    Padding="20,10,20,10"
+                                    BorderThickness="1,1,1,0"
+                                    BorderBrush="Transparent">
+                                <ContentPresenter ContentSource="Header"
+                                                  VerticalAlignment="Center"
+                                                  TextElement.Foreground="{TemplateBinding Foreground}"/>
+                            </Border>
+                            <Border x:Name="GlowBar"
+                                    Height="3" VerticalAlignment="Bottom"
+                                    CornerRadius="3,3,0,0"
+                                    Background="#89B4FA"
+                                    Margin="8,0,8,0"
+                                    Opacity="0"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="TabBg" Property="Background" Value="#282838"/>
+                                <Setter Property="Foreground" Value="#CDD6F4"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="TabBg" Property="Background" Value="#181825"/>
+                                <Setter TargetName="TabBg" Property="BorderBrush" Value="#313244"/>
+                                <Setter TargetName="GlowBar" Property="Opacity" Value="1"/>
+                                <Setter Property="Foreground" Value="#89B4FA"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <TabControl x:Name="MainTabControl" Margin="12" Background="#1E1E2E">
+
+        <!-- ==================== Tab 1: K线图 ==================== -->
+        <TabItem Header="📊 K线图">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="200"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- 左侧：自选列表 -->
+                <Border Grid.Column="0" Background="#181825" CornerRadius="6"
+                        BorderBrush="#313244" BorderThickness="1" Margin="0,0,8,0">
+                    <DockPanel Margin="8">
+                        <TextBlock Text="自选列表" DockPanel.Dock="Top"
+                                   Foreground="#89B4FA" FontSize="15" FontWeight="Bold"
+                                   Margin="0,0,0,8"/>
+                        <Grid DockPanel.Dock="Top" Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="WatchlistInput" Grid.Column="0"
+                                     FontSize="13" Padding="6,4"
+                                     Background="#313244" Foreground="#CDD6F4"
+                                     BorderBrush="#45475A" BorderThickness="1"
+                                     KeyDown="WatchlistInput_KeyDown"
+                                     ToolTip="输入代码和名称，如: 600519 贵州茅台"/>
+                            <Button x:Name="AddWatchlistBtn" Grid.Column="1" Content="+"
+                                    FontSize="16" FontWeight="Bold" Padding="10,2" Margin="4,0,0,0"
+                                    Background="#89B4FA" Foreground="#1E1E2E"
+                                    BorderThickness="0" Cursor="Hand"
+                                    Click="AddWatchlistBtn_Click"/>
+                        </Grid>
+                        <Button x:Name="RemoveWatchlistBtn" DockPanel.Dock="Bottom"
+                                Content="🗑 删除选中" FontSize="12" Padding="6,4" Margin="0,8,0,0"
+                                Background="#313244" Foreground="#F38BA8"
+                                BorderBrush="#45475A" BorderThickness="1" Cursor="Hand"
+                                Click="RemoveWatchlistBtn_Click"/>
+                        <ListBox x:Name="WatchlistBox"
+                                 Background="#11111B" Foreground="#CDD6F4"
+                                 BorderBrush="#313244" BorderThickness="1"
+                                 FontSize="13" MouseDoubleClick="WatchlistBox_MouseDoubleClick">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Margin="2">
+                                        <TextBlock Text="{Binding Name}" Foreground="#CDD6F4" FontSize="13"/>
+                                        <TextBlock Text="{Binding Code}" Foreground="#585B70" FontSize="11"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </DockPanel>
+                </Border>
+
+                <!-- 右侧：K线图内容 -->
+                <Grid Grid.Column="1">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Text="📈 股票 &amp; 大宗商品 K线图查看器"
+                               FontSize="22" FontWeight="Bold" Foreground="#89B4FA"
+                               HorizontalAlignment="Left" Margin="0,0,0,12"/>
+
+                    <Grid Grid.Row="1" Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="250"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="代码:" Foreground="#CDD6F4"
+                                   FontSize="15" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <TextBox x:Name="SymbolInput" Grid.Column="1"
+                                 FontSize="15" Padding="8,6"
+                                 Background="#313244" Foreground="#CDD6F4"
+                                 BorderBrush="#45475A" BorderThickness="1"
+                                 KeyDown="SymbolInput_KeyDown"/>
+                        <Button x:Name="SearchBtn" Grid.Column="2" Content="🔍 查询"
+                                FontSize="14" Padding="16,6" Margin="8,0,0,0"
+                                Background="#89B4FA" Foreground="#1E1E2E"
+                                FontWeight="Bold" BorderThickness="0"
+                                Click="SearchBtn_Click"/>
+                        <TextBlock Grid.Column="3" Text="范围:" Foreground="#CDD6F4"
+                                   FontSize="15" VerticalAlignment="Center" Margin="20,0,8,0"/>
+                        <ComboBox x:Name="RangeCombo" Grid.Column="4"
+                                  FontSize="14" Padding="8,4" MinWidth="100"
+                                  Background="#313244" Foreground="#CDD6F4"
+                                  BorderBrush="#45475A">
+                            <ComboBoxItem Content="5天" Tag="5d"/>
+                            <ComboBoxItem Content="1个月" Tag="1mo"/>
+                            <ComboBoxItem Content="3个月" Tag="3mo" IsSelected="True"/>
+                            <ComboBoxItem Content="6个月" Tag="6mo"/>
+                            <ComboBoxItem Content="1年" Tag="1y"/>
+                            <ComboBoxItem Content="2年" Tag="2y"/>
+                            <ComboBoxItem Content="5年" Tag="5y"/>
+                            <ComboBoxItem Content="10年" Tag="10y"/>
+                            <ComboBoxItem Content="全部" Tag="max"/>
+                        </ComboBox>
+                        <TextBlock Grid.Column="5" Text="起始日:" Foreground="#CDD6F4"
+                                   FontSize="13" VerticalAlignment="Center" Margin="16,0,6,0"/>
+                        <DatePicker x:Name="StartDatePicker" Grid.Column="6"
+                                    FontSize="13" Padding="4,4" Width="130"
+                                    Background="#313244" Foreground="#CDD6F4"
+                                    BorderBrush="#45475A"
+                                    SelectedDateChanged="StartDate_Changed"
+                                    ToolTip="选择后按指定日期查询，留空则用范围"/>
+                        <TextBlock Grid.Column="7" Text="数据源:" Foreground="#CDD6F4"
+                                   FontSize="15" VerticalAlignment="Center" Margin="20,0,8,0"/>
+                        <ComboBox x:Name="DataSourceCombo" Grid.Column="8"
+                                  FontSize="14" Padding="8,4" MinWidth="110"
+                                  Background="#313244" Foreground="#CDD6F4"
+                                  BorderBrush="#45475A">
+                            <ComboBoxItem Content="通达信" Tag="tdx" IsSelected="True"/>
+                            <ComboBoxItem Content="Yahoo Finance" Tag="yahoo"/>
+                        </ComboBox>
+                        <StackPanel Grid.Column="9" Orientation="Horizontal" VerticalAlignment="Center" Margin="20,0,0,0">
+                            <CheckBox x:Name="ShowMA" Content="MA均线" IsChecked="True"
+                                      Foreground="#CDD6F4" FontSize="13" Margin="0,0,16,0"
+                                      Cursor="Hand" Click="Option_Changed"/>
+                            <CheckBox x:Name="MirrorFlip" Content="镜像翻转"
+                                      Foreground="#CDD6F4" FontSize="13" Margin="0,0,16,0"
+                                      Cursor="Hand" Click="Option_Changed"
+                                      ToolTip="沿X轴镜像翻转K线图（Y轴反向）"/>
+                            <TextBlock Text="趋势线:" Foreground="#CDD6F4" FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <ComboBox x:Name="TrendMethod" FontSize="13" MinWidth="90"
+                                      Background="#313244" Foreground="#CDD6F4" BorderBrush="#45475A"
+                                      SelectionChanged="Option_Changed">
+                                <ComboBoxItem Content="关闭" Tag="none"/>
+                                <ComboBoxItem Content="Raw" Tag="raw"/>
+                                <ComboBoxItem Content="DWT" Tag="dwt"/>
+                                <ComboBoxItem Content="SG平滑" Tag="sg"/>
+                                <ComboBoxItem Content="DWT+SG" Tag="combined" IsSelected="True"/>
+                            </ComboBox>
+                        </StackPanel>
+                    </Grid>
+
+                    <WrapPanel Grid.Row="2" Margin="0,0,0,12">
+                        <TextBlock Text="快捷: " Foreground="#A6ADC8" FontSize="13" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <Button Content="AAPL" Style="{StaticResource QuickBtn}" Click="QuickBtn_Click" Tag="AAPL" Margin="0,0,6,4"/>
+                        <Button Content="TSLA" Style="{StaticResource QuickBtn}" Click="QuickBtn_Click" Tag="TSLA" Margin="0,0,6,4"/>
+                        <Button Content="MSFT" Style="{StaticResource QuickBtn}" Click="QuickBtn_Click" Tag="MSFT" Margin="0,0,6,4"/>
+                        <Button Content="NVDA" Style="{StaticResource QuickBtn}" Click="QuickBtn_Click" Tag="NVDA" Margin="0,0,6,4"/>
+                        <Button Content="GOOGL" Style="{StaticResource QuickBtn}" Click="QuickBtn_Click" Tag="GOOGL" Margin="0,0,6,4"/>
+                        <Button Content="贵州茅台" Style="{StaticResource QuickBtn}" Click="QuickBtn_Click" Tag="600519.SS" Margin="0,0,6,4"/>
+                        <Button Content="平安银行" Style="{StaticResource QuickBtn}" Click="QuickBtn_Click" Tag="000001.SZ" Margin="0,0,6,4"/>
+                        <Button Content="宁德时代" Style="{StaticResource QuickBtn}" Click="QuickBtn_Click" Tag="300750.SZ" Margin="0,0,6,4"/>
+                        <Button Content="黄金" Style="{StaticResource QuickBtn}" Click="QuickBtn_Click" Tag="GC=F" Margin="0,0,6,4"/>
+                        <Button Content="原油" Style="{StaticResource QuickBtn}" Click="QuickBtn_Click" Tag="CL=F" Margin="0,0,6,4"/>
+                        <Button Content="白银" Style="{StaticResource QuickBtn}" Click="QuickBtn_Click" Tag="SI=F" Margin="0,0,6,4"/>
+                        <Button Content="天然气" Style="{StaticResource QuickBtn}" Click="QuickBtn_Click" Tag="NG=F" Margin="0,0,6,4"/>
+                        <Button Content="铜" Style="{StaticResource QuickBtn}" Click="QuickBtn_Click" Tag="HG=F" Margin="0,0,6,4"/>
+                    </WrapPanel>
+
+                    <Border Grid.Row="3" Background="#181825" CornerRadius="6" BorderBrush="#313244" BorderThickness="1">
+                        <Grid x:Name="ChartGrid">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="120" x:Name="VolumeRow"/>
+                            </Grid.RowDefinitions>
+                            <sp:WpfPlot x:Name="PriceChart" Grid.Row="0" Background="#181825"/>
+                            <GridSplitter Grid.Row="1" Height="5" HorizontalAlignment="Stretch"
+                                          Background="#313244" ResizeBehavior="PreviousAndNext"
+                                          ResizeDirection="Rows" Cursor="SizeNS"/>
+                            <sp:WpfPlot x:Name="VolumeChart" Grid.Row="2" Background="#181825"/>
+                            <TextBlock x:Name="PlaceholderText" Text="请输入股票代码后点击查询"
+                                       Foreground="#585B70" FontSize="18"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       Grid.RowSpan="3"/>
+                            <ProgressBar x:Name="LoadingBar" IsIndeterminate="True"
+                                         Height="3" VerticalAlignment="Top" Visibility="Collapsed"
+                                         Foreground="#89B4FA" Background="Transparent"
+                                         Grid.RowSpan="3"/>
+                            <Border x:Name="TooltipBorder" Visibility="Collapsed"
+                                    Background="#E6000000" CornerRadius="4"
+                                    BorderBrush="#45475A" BorderThickness="1"
+                                    Padding="8,5" Grid.RowSpan="3"
+                                    HorizontalAlignment="Left" VerticalAlignment="Top"
+                                    IsHitTestVisible="False">
+                                <TextBlock x:Name="TooltipText" FontSize="11" LineHeight="16"
+                                           Foreground="#CDD6F4" FontFamily="Consolas"/>
+                            </Border>
+                        </Grid>
+                    </Border>
+
+                    <StackPanel Grid.Row="4" Orientation="Horizontal" Margin="0,12,0,0">
+                        <TextBlock x:Name="StatusText" Text="就绪" Foreground="#A6ADC8" FontSize="13" VerticalAlignment="Center"/>
+                        <TextBlock x:Name="DataInfoText" Text="" Foreground="#A6ADC8" FontSize="13" VerticalAlignment="Center" Margin="20,0,0,0"/>
+                    </StackPanel>
+                </Grid>
+            </Grid>
+        </TabItem>
+
+        <!-- ==================== Tab 2: 走势比对 ==================== -->
+        <TabItem Header="📈 走势比对">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="220"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- 左侧：比对配置列表 -->
+                <Border Grid.Column="0" Background="#181825" CornerRadius="6"
+                        BorderBrush="#313244" BorderThickness="1" Margin="0,0,8,0">
+                    <DockPanel Margin="8">
+                        <TextBlock Text="比对配置" DockPanel.Dock="Top"
+                                   Foreground="#89B4FA" FontSize="15" FontWeight="Bold"
+                                   Margin="0,0,0,8"/>
+
+                        <!-- 添加比对配置 -->
+                        <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+                            <TextBox x:Name="ComparePairName" FontSize="12" Padding="6,4" Margin="0,0,0,4"
+                                     Background="#313244" Foreground="#CDD6F4"
+                                     BorderBrush="#45475A" BorderThickness="1"
+                                     ToolTip="配置名称，如: 茅台vs平安"/>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBox x:Name="ComparePairCode1" Grid.Column="0" FontSize="12" Padding="6,4" Margin="0,0,2,0"
+                                         Background="#313244" Foreground="#CDD6F4"
+                                         BorderBrush="#45475A" BorderThickness="1"
+                                         ToolTip="股票A代码"/>
+                                <TextBox x:Name="ComparePairCode2" Grid.Column="1" FontSize="12" Padding="6,4" Margin="2,0,0,0"
+                                         Background="#313244" Foreground="#CDD6F4"
+                                         BorderBrush="#45475A" BorderThickness="1"
+                                         ToolTip="股票B代码"/>
+                                <Button x:Name="AddComparePairBtn" Grid.Column="2" Content="+"
+                                        FontSize="14" FontWeight="Bold" Padding="8,2" Margin="4,0,0,0"
+                                        Background="#89B4FA" Foreground="#1E1E2E"
+                                        BorderThickness="0" Cursor="Hand"
+                                        Click="AddComparePairBtn_Click"/>
+                            </Grid>
+                        </StackPanel>
+
+                        <Button x:Name="RemoveComparePairBtn" DockPanel.Dock="Bottom"
+                                Content="🗑 删除选中" FontSize="12" Padding="6,4" Margin="0,8,0,0"
+                                Background="#313244" Foreground="#F38BA8"
+                                BorderBrush="#45475A" BorderThickness="1" Cursor="Hand"
+                                Click="RemoveComparePairBtn_Click"/>
+
+                        <ListBox x:Name="ComparePairsBox"
+                                 Background="#11111B" Foreground="#CDD6F4"
+                                 BorderBrush="#313244" BorderThickness="1"
+                                 FontSize="13" MouseDoubleClick="ComparePairsBox_MouseDoubleClick">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Margin="2">
+                                        <TextBlock Text="{Binding Name}" Foreground="#CDD6F4" FontSize="13" FontWeight="SemiBold"/>
+                                        <TextBlock Foreground="#585B70" FontSize="11">
+                                            <Run Text="{Binding Code1}"/>
+                                            <Run Text=" vs "/>
+                                            <Run Text="{Binding Code2}"/>
+                                        </TextBlock>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </DockPanel>
+                </Border>
+
+                <!-- 右侧：比对内容 -->
+                <Grid Grid.Column="1">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <Grid Grid.Row="0" Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="140"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="140"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="股票A:" Foreground="#CDD6F4"
+                                   FontSize="15" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <TextBox x:Name="CompareInput1" Grid.Column="1"
+                                 FontSize="15" Padding="8,6"
+                                 Background="#313244" Foreground="#CDD6F4"
+                                 BorderBrush="#45475A" BorderThickness="1"
+                                 KeyDown="CompareInput_KeyDown"/>
+                        <TextBlock Grid.Column="2" Text="股票B:" Foreground="#CDD6F4"
+                                   FontSize="15" VerticalAlignment="Center" Margin="12,0,8,0"/>
+                        <TextBox x:Name="CompareInput2" Grid.Column="3"
+                                 FontSize="15" Padding="8,6"
+                                 Background="#313244" Foreground="#CDD6F4"
+                                 BorderBrush="#45475A" BorderThickness="1"
+                                 KeyDown="CompareInput_KeyDown"/>
+                        <Button x:Name="CompareBtn" Grid.Column="4" Content="🔍 比对"
+                                FontSize="14" Padding="16,6" Margin="8,0,0,0"
+                                Background="#89B4FA" Foreground="#1E1E2E"
+                                FontWeight="Bold" BorderThickness="0"
+                                Click="CompareBtn_Click"/>
+                        <TextBlock Grid.Column="5" Text="范围:" Foreground="#CDD6F4"
+                                   FontSize="15" VerticalAlignment="Center" Margin="20,0,8,0"/>
+                        <ComboBox x:Name="CompareRangeCombo" Grid.Column="6"
+                                  FontSize="14" Padding="8,4" MinWidth="100"
+                                  Background="#313244" Foreground="#CDD6F4"
+                                  BorderBrush="#45475A">
+                            <ComboBoxItem Content="1个月" Tag="1mo"/>
+                            <ComboBoxItem Content="3个月" Tag="3mo" IsSelected="True"/>
+                            <ComboBoxItem Content="6个月" Tag="6mo"/>
+                            <ComboBoxItem Content="1年" Tag="1y"/>
+                            <ComboBoxItem Content="2年" Tag="2y"/>
+                            <ComboBoxItem Content="5年" Tag="5y"/>
+                            <ComboBoxItem Content="10年" Tag="10y"/>
+                        </ComboBox>
+                        <TextBlock Grid.Column="7" Text="起始日:" Foreground="#CDD6F4"
+                                   FontSize="13" VerticalAlignment="Center" Margin="16,0,6,0"/>
+                        <DatePicker x:Name="CompareStartDatePicker" Grid.Column="8"
+                                    FontSize="13" Padding="4,4" Width="125"
+                                    Background="#313244" Foreground="#CDD6F4"
+                                    BorderBrush="#45475A"
+                                    ToolTip="选择后按指定日期查询，留空则用范围"/>
+                        <TextBlock Grid.Column="9" Text="数据源:" Foreground="#CDD6F4"
+                                   FontSize="15" VerticalAlignment="Center" Margin="20,0,8,0"/>
+                        <ComboBox x:Name="CompareDataSourceCombo" Grid.Column="10"
+                                  FontSize="14" Padding="8,4" MinWidth="110"
+                                  Background="#313244" Foreground="#CDD6F4"
+                                  BorderBrush="#45475A">
+                            <ComboBoxItem Content="通达信" Tag="tdx" IsSelected="True"/>
+                            <ComboBoxItem Content="Yahoo Finance" Tag="yahoo"/>
+                        </ComboBox>
+                    </Grid>
+
+                    <Border Grid.Row="1" Background="#181825" CornerRadius="6" BorderBrush="#313244" BorderThickness="1">
+                        <Grid>
+                            <sp:WpfPlot x:Name="CompareChart" Background="#181825"/>
+                            <TextBlock x:Name="ComparePlaceholder" Text="输入两只股票代码进行走势比对"
+                                       Foreground="#585B70" FontSize="18"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            <ProgressBar x:Name="CompareLoading" IsIndeterminate="True"
+                                         Height="3" VerticalAlignment="Top" Visibility="Collapsed"
+                                         Foreground="#89B4FA" Background="Transparent"/>
+                        </Grid>
+                    </Border>
+
+                    <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,12,0,0">
+                        <TextBlock Text="显示模式:" Foreground="#CDD6F4" FontSize="13" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <ComboBox x:Name="CompareMode" FontSize="13" MinWidth="100"
+                                  Background="#313244" Foreground="#CDD6F4" BorderBrush="#45475A"
+                                  SelectionChanged="CompareMode_Changed">
+                            <ComboBoxItem Content="折线形态" Tag="line" IsSelected="True"/>
+                            <ComboBoxItem Content="DWT形态" Tag="dwt"/>
+                        </ComboBox>
+                        <TextBlock Text="DWT层数:" Foreground="#CDD6F4" FontSize="13" VerticalAlignment="Center" Margin="16,0,8,0"
+                                   x:Name="DwtLevelLabel" Visibility="Collapsed"/>
+                        <ComboBox x:Name="DwtLevelCombo" FontSize="13" MinWidth="60"
+                                  Background="#313244" Foreground="#CDD6F4" BorderBrush="#45475A"
+                                  Visibility="Collapsed"
+                                  SelectionChanged="CompareMode_Changed">
+                            <ComboBoxItem Content="2" Tag="2"/>
+                            <ComboBoxItem Content="3" Tag="3"/>
+                            <ComboBoxItem Content="4" Tag="4"/>
+                            <ComboBoxItem Content="5" Tag="5" IsSelected="True"/>
+                            <ComboBoxItem Content="6" Tag="6"/>
+                            <ComboBoxItem Content="7" Tag="7"/>
+                            <ComboBoxItem Content="8" Tag="8"/>
+                        </ComboBox>
+                        <TextBlock x:Name="CompareStatus" Text="就绪"
+                                   Foreground="#A6ADC8" FontSize="13" VerticalAlignment="Center" Margin="16,0,0,0"/>
+                    </StackPanel>
+                </Grid>
+            </Grid>
+        </TabItem>
+
+        <!-- ==================== Tab 3: 量价扫描 ==================== -->
+        <TabItem Header="🔍 量价扫描">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- 参数面板 -->
+                <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8">
+                    <TextBlock Text="扫描日期:" Foreground="#CDD6F4" FontSize="14"
+                               VerticalAlignment="Center" Margin="0,0,6,0"/>
+                    <DatePicker x:Name="ScanDatePicker" FontSize="14" Padding="4,4" Width="135"
+                                Background="#313244" Foreground="#CDD6F4" BorderBrush="#45475A"
+                                ToolTip="选择要扫描的交易日"/>
+                    <TextBlock Text="量比≥" Foreground="#CDD6F4" FontSize="14"
+                               VerticalAlignment="Center" Margin="16,0,6,0"/>
+                    <TextBox x:Name="ScanVolRatioInput" Text="2.0" FontSize="14" Padding="6,4" Width="60"
+                             Background="#313244" Foreground="#CDD6F4" BorderBrush="#45475A"/>
+                    <TextBlock Text="涨幅≥" Foreground="#CDD6F4" FontSize="14"
+                               VerticalAlignment="Center" Margin="16,0,6,0"/>
+                    <TextBox x:Name="ScanPriceChgInput" Text="5.0" FontSize="14" Padding="6,4" Width="60"
+                             Background="#313244" Foreground="#CDD6F4" BorderBrush="#45475A"/>
+                    <TextBlock Text="%" Foreground="#CDD6F4" FontSize="14"
+                               VerticalAlignment="Center" Margin="2,0,0,0"/>
+                    <Button x:Name="ScanStartBtn" Content="🔍 开始扫描" FontSize="14" Padding="16,6"
+                            Margin="16,0,0,0" Background="#89B4FA" Foreground="#1E1E2E"
+                            FontWeight="Bold" BorderThickness="0" Cursor="Hand"
+                            Click="ScanStartBtn_Click"/>
+                    <Button x:Name="ScanCancelBtn" Content="✕ 取消" FontSize="14" Padding="12,6"
+                            Margin="8,0,0,0" Background="#313244" Foreground="#F38BA8"
+                            BorderBrush="#45475A" Cursor="Hand" IsEnabled="False"
+                            Click="ScanCancelBtn_Click"/>
+                    <Button x:Name="ImportTdxBtn" Content="📁 导入通达信数据" FontSize="14" Padding="12,6"
+                            Margin="16,0,0,0" Background="#313244" Foreground="#A6E3A1"
+                            BorderBrush="#45475A" Cursor="Hand"
+                            Click="ImportTdxBtn_Click"
+                            ToolTip="选择通达信导出的txt文件夹批量导入"/>
+                    <TextBlock x:Name="ScanProgressText" Text="" Foreground="#A6ADC8" FontSize="13"
+                               VerticalAlignment="Center" Margin="16,0,0,0"/>
+                </StackPanel>
+
+                <!-- 结果区域 -->
+                <Grid Grid.Row="1">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <ProgressBar x:Name="ScanProgressBar" Grid.Row="0" Height="3"
+                                 Visibility="Collapsed" Foreground="#89B4FA" Background="Transparent"
+                                 Margin="0,0,0,4"/>
+
+                    <Border Grid.Row="1" Background="#181825" CornerRadius="6"
+                            BorderBrush="#313244" BorderThickness="1">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <DataGrid x:Name="ScanResultsGrid" Grid.Row="0"
+                                      Background="#181825" Foreground="#CDD6F4"
+                                      BorderThickness="0" GridLinesVisibility="Horizontal"
+                                      HorizontalGridLinesBrush="#313244"
+                                      HeadersVisibility="Column"
+                                      RowBackground="#181825" AlternatingRowBackground="#1E1E2E"
+                                      FontSize="13" AutoGenerateColumns="False"
+                                      IsReadOnly="True" SelectionMode="Single"
+                                      MouseDoubleClick="ScanResultsGrid_MouseDoubleClick">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="代码" Binding="{Binding Code}" Width="80"/>
+                                    <DataGridTextColumn Header="名称" Binding="{Binding Name}" Width="100"/>
+                                    <DataGridTextColumn Header="日期" Binding="{Binding Date, StringFormat=yyyy-MM-dd}" Width="100"/>
+                                    <DataGridTextColumn Header="收盘" Binding="{Binding Close, StringFormat=F2}" Width="80"/>
+                                    <DataGridTextColumn Header="涨幅%" Binding="{Binding PriceChange, StringFormat=F2}" Width="80"/>
+                                    <DataGridTextColumn Header="量比" Binding="{Binding VolumeRatio, StringFormat=F2}" Width="80"/>
+                                    <DataGridTextColumn Header="成交额" Binding="{Binding Turnover, StringFormat=F0}" Width="*"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                            <TextBlock x:Name="ScanPlaceholder" Text="设置参数后点击「开始扫描」搜索量价齐升的股票"
+                                       Foreground="#585B70" FontSize="16"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       Grid.Row="0"/>
+                            <!-- 分页栏 -->
+                            <Border Grid.Row="1" Background="#11111B" CornerRadius="0,0,6,6"
+                                    BorderBrush="#313244" BorderThickness="1,0,0,0">
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center"
+                                            Margin="0,6" x:Name="ScanPagerPanel" Visibility="Collapsed">
+                                    <Button x:Name="ScanPrevPageBtn" Content="◀ 上一页" FontSize="13"
+                                            Padding="12,4" Margin="0,0,8,0"
+                                            Background="#313244" Foreground="#CDD6F4"
+                                            BorderBrush="#45475A" Cursor="Hand"
+                                            Click="ScanPrevPageBtn_Click"/>
+                                    <TextBlock x:Name="ScanPageInfo" Text="1 / 1" FontSize="13"
+                                               Foreground="#A6ADC8" VerticalAlignment="Center"
+                                               Margin="8,0"/>
+                                    <Button x:Name="ScanNextPageBtn" Content="下一页 ▶" FontSize="13"
+                                            Padding="12,4" Margin="8,0,0,0"
+                                            Background="#313244" Foreground="#CDD6F4"
+                                            BorderBrush="#45475A" Cursor="Hand"
+                                            Click="ScanNextPageBtn_Click"/>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </Grid>
+        </TabItem>
+
+    </TabControl>
+</Window>
