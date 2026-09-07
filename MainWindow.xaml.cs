@@ -26,6 +26,8 @@ public partial class MainWindow : Window
     private List<ScanResult> _allScanResults = new();
     private int _scanCurrentPage = 0;
     private const int ScanPageSize = 50;
+    /// <summary>黄金计价基准：华安黄金ETF(518880)</summary>
+    private const string GoldEtfSymbol = "518880";
     // 走势比对最后查询数据（用于切换显示模式时重绘）
     private double[]? _compareXs;
     private double[]? _compareYs1;
@@ -62,6 +64,9 @@ public partial class MainWindow : Window
         _scannerService = new ScannerService(_database);
         _importService = new TdxImportService(_database);
         _dataService = _tdxService;
+        // 区间涨跌扫描的默认日期：近一个月
+        RangeStartDatePicker.SelectedDate = DateTime.Today.AddMonths(-1);
+        RangeEndDatePicker.SelectedDate = DateTime.Today;
         SetupAxisSync();
         PriceChart.MouseMove += PriceChart_MouseMove;
         PriceChart.MouseLeave += PriceChart_MouseLeave;
@@ -272,6 +277,21 @@ public partial class MainWindow : Window
 
             if (data.Candles.Count == 0) { SetStatus("未获取到数据，请检查代码或网络连接"); return; }
 
+            // 黄金计价：将K线价格换算为黄金ETF份额
+            if (GoldPricing.IsChecked == true && symbol != GoldEtfSymbol)
+            {
+                SetStatus("正在获取黄金ETF基准价格...");
+                var converted = await ConvertToGoldPricingAsync(data);
+                if (converted != null)
+                {
+                    data = converted;
+                }
+                else
+                {
+                    SetStatus("⚠️ 黄金ETF数据获取失败，按原始价格显示");
+                }
+            }
+
             _lastData = data;
             RenderChart(data);
             PlaceholderText.Visibility = Visibility.Collapsed;
@@ -288,6 +308,74 @@ public partial class MainWindow : Window
             DataInfoText.Text = "";
         }
         finally { SetLoading(false); }
+    }
+
+    /// <summary>
+    /// 黄金计价开关切换：重新查询换算
+    /// </summary>
+    private async void GoldPricing_Changed(object sender, RoutedEventArgs e)
+    {
+        if (!IsLoaded) return;
+        if (_lastData != null && !string.IsNullOrEmpty(SymbolInput.Text.Trim()))
+            _ = SearchSymbolAsync();
+    }
+
+    /// <summary>
+    /// 将股票K线价格换算为黄金ETF份额计价（每日价格 ÷ 黄金ETF当日收盘价）
+    /// 用于分析股票与黄金的比价关系
+    /// </summary>
+    /// <returns>换算后的数据；黄金数据获取失败时返回null</returns>
+    private async Task<MarketChartData?> ConvertToGoldPricingAsync(MarketChartData data)
+    {
+        try
+        {
+            // 获取黄金ETF数据（多取60条缓冲，确保覆盖股票日期范围）
+            int goldCount = data.Candles.Count + 60;
+            var goldData = await _tdxService.GetChartDataAsync(GoldEtfSymbol, $"custom:{goldCount}", "1d", _ => { });
+            if (goldData.Candles.Count == 0) return null;
+
+            // 构建 日期->金价 映射
+            var goldByDate = new Dictionary<DateTime, double>();
+            foreach (var g in goldData.Candles)
+                goldByDate[g.Date.Date] = g.Close;
+
+            var converted = new List<CandleStickData>();
+            double lastGold = 0;
+            foreach (var c in data.Candles)
+            {
+                if (!goldByDate.TryGetValue(c.Date.Date, out double g) || g <= 0)
+                    g = lastGold;   // 当日无金价（如美股交易日与A股不重合），沿用最近金价
+                if (g <= 0) continue; // 尚无金价可用，跳过该K线
+                lastGold = g;
+
+                converted.Add(new CandleStickData
+                {
+                    Date = c.Date,
+                    Open = c.Open / g,
+                    High = c.High / g,
+                    Low = c.Low / g,
+                    Close = c.Close / g,
+                    Volume = c.Volume,
+                    Amount = c.Amount,
+                    Amplitude = c.Amplitude
+                });
+            }
+
+            if (converted.Count == 0) return null;
+
+            return new MarketChartData
+            {
+                Symbol = data.Symbol,
+                ExchangeName = data.ExchangeName,
+                Currency = $"份黄金ETF(÷{GoldEtfSymbol})",
+                FromCache = data.FromCache,
+                Candles = converted
+            };
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     /// <summary>
@@ -1086,19 +1174,99 @@ public partial class MainWindow : Window
 
     // ==================== 量价扫描 ====================
 
+    private void ScanMode_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (SurgeParams == null || StableParams == null || SurgePriceChgLabel == null
+            || ScanDateParams == null || RangeParams == null) return;
+
+        // 0=量价齐升 1=量价平稳 2=量价齐跌 3=区间涨跌
+        int mode = ScanModeCombo.SelectedIndex;
+        bool isStable = mode == 1;
+        bool isDecline = mode == 2;
+        bool isRange = mode == 3;
+
+        // 参数面板切换：齐升/齐跌共用一套，平稳单独一套，区间单独一套
+        SurgeParams.Visibility = (isStable || isRange) ? Visibility.Collapsed : Visibility.Visible;
+        StableParams.Visibility = isStable ? Visibility.Visible : Visibility.Collapsed;
+        ScanDateParams.Visibility = isRange ? Visibility.Collapsed : Visibility.Visible;
+        RangeParams.Visibility = isRange ? Visibility.Visible : Visibility.Collapsed;
+
+        // 齐跌模式下标签改为"跌幅≥"
+        SurgePriceChgLabel.Text = isDecline ? "跌幅≥" : "涨幅≥";
+
+        // 更新DataGrid列标题
+        if (ScanResultsGrid.Columns.Count >= 7)
+        {
+            ScanResultsGrid.Columns[4].Header = isStable ? "波动率%" : isRange ? "区间涨跌幅%" : "涨跌幅%";
+            ScanResultsGrid.Columns[5].Header = isRange ? "起始收盘" : "量比";
+            ScanResultsGrid.Columns[6].Header = isStable ? "平均成交量" : isRange ? "区间成交额" : "成交额";
+        }
+
+        // 更新占位提示
+        ScanPlaceholder.Text = mode switch
+        {
+            1 => "设置参数后点击「开始扫描」搜索量价平稳的股票",
+            2 => "设置参数后点击「开始扫描」搜索量价齐跌的股票",
+            3 => "设置起止日期后点击「开始扫描」搜索区间大涨/大跌的股票",
+            _ => "设置参数后点击「开始扫描」搜索量价齐升的股票"
+        };
+    }
+
     private async void ScanStartBtn_Click(object sender, RoutedEventArgs e)
     {
-        // 解析参数
         DateTime targetDate = ScanDatePicker.SelectedDate ?? DateTime.Today;
-        if (!double.TryParse(ScanVolRatioInput.Text, out double volRatio) || volRatio < 1.0)
+        bool isStable = ScanModeCombo.SelectedIndex == 1;
+        bool isDecline = ScanModeCombo.SelectedIndex == 2;
+        bool isRange = ScanModeCombo.SelectedIndex == 3;
+
+        // 区间模式的起止日期
+        DateTime rangeStart = RangeStartDatePicker.SelectedDate ?? DateTime.Today.AddMonths(-1);
+        DateTime rangeEnd = RangeEndDatePicker.SelectedDate ?? DateTime.Today;
+
+        // 验证参数
+        if (isRange)
         {
-            ScanProgressText.Text = "⚠️ 量比阈值需≥1.0";
-            return;
+            if (rangeStart >= rangeEnd)
+            {
+                ScanProgressText.Text = "⚠️ 起始日期必须早于终止日期";
+                return;
+            }
+            if (!double.TryParse(RangeChgInput.Text, out double rangeChg) || rangeChg <= 0)
+            {
+                ScanProgressText.Text = "⚠️ 涨/跌幅阈值需大于0";
+                return;
+            }
         }
-        if (!double.TryParse(ScanPriceChgInput.Text, out double priceChg))
+        else if (isStable)
         {
-            ScanProgressText.Text = "⚠️ 涨幅阈值格式错误";
-            return;
+            if (!int.TryParse(ScanDaysInput.Text, out int days) || days < 3 || days > 30)
+            {
+                ScanProgressText.Text = "⚠️ 观察天数需在3-30之间";
+                return;
+            }
+            if (!double.TryParse(ScanFluctuationInput.Text, out double maxFluctuation) || maxFluctuation <= 0)
+            {
+                ScanProgressText.Text = "⚠️ 波动率阈值格式错误";
+                return;
+            }
+            if (!double.TryParse(ScanVolRatioMaxInput.Text, out double maxVolRatio) || maxVolRatio <= 0)
+            {
+                ScanProgressText.Text = "⚠️ 量比阈值格式错误";
+                return;
+            }
+        }
+        else
+        {
+            if (!double.TryParse(ScanVolRatioInput.Text, out double volRatio) || volRatio < 1.0)
+            {
+                ScanProgressText.Text = "⚠️ 量比阈值需≥1.0";
+                return;
+            }
+            if (!double.TryParse(ScanPriceChgInput.Text, out double priceChg))
+            {
+                ScanProgressText.Text = "⚠️ 涨/跌幅阈值格式错误";
+                return;
+            }
         }
 
         // UI状态
@@ -1115,14 +1283,51 @@ public partial class MainWindow : Window
 
         try
         {
-            var results = await _scannerService.ScanAsync(
-                targetDate, volRatio, priceChg,
-                (scanned, total, matched) => Dispatcher.Invoke(() =>
-                {
-                    ScanProgressText.Text = $"已扫描 {scanned}/{total} | 符合条件: {matched}";
-                    ScanPlaceholder.Text = $"正在扫描... {scanned}/{total}";
-                }),
-                _scanCts.Token);
+            List<ScanResult> results;
+
+            if (isRange)
+            {
+                double rangeChg = double.Parse(RangeChgInput.Text);
+                bool rangeIsDecline = RangeDirectionCombo.SelectedIndex == 1;
+
+                results = await _scannerService.ScanRangeAsync(
+                    rangeStart, rangeEnd, rangeChg, rangeIsDecline,
+                    (scanned, total, matched) => Dispatcher.Invoke(() =>
+                    {
+                        ScanProgressText.Text = $"已扫描 {scanned}/{total} | 符合条件: {matched}";
+                        ScanPlaceholder.Text = $"正在扫描... {scanned}/{total}";
+                    }),
+                    _scanCts.Token);
+            }
+            else if (isStable)
+            {
+                int days = int.Parse(ScanDaysInput.Text);
+                double maxFluctuation = double.Parse(ScanFluctuationInput.Text);
+                double maxVolRatio = double.Parse(ScanVolRatioMaxInput.Text);
+
+                results = await _scannerService.ScanStableAsync(
+                    targetDate, days, maxFluctuation, maxVolRatio,
+                    (scanned, total, matched) => Dispatcher.Invoke(() =>
+                    {
+                        ScanProgressText.Text = $"已扫描 {scanned}/{total} | 符合条件: {matched}";
+                        ScanPlaceholder.Text = $"正在扫描... {scanned}/{total}";
+                    }),
+                    _scanCts.Token);
+            }
+            else
+            {
+                double volRatio = double.Parse(ScanVolRatioInput.Text);
+                double priceChg = double.Parse(ScanPriceChgInput.Text);
+
+                results = await _scannerService.ScanAsync(
+                    targetDate, volRatio, priceChg,
+                    (scanned, total, matched) => Dispatcher.Invoke(() =>
+                    {
+                        ScanProgressText.Text = $"已扫描 {scanned}/{total} | 符合条件: {matched}";
+                        ScanPlaceholder.Text = $"正在扫描... {scanned}/{total}";
+                    }),
+                    _scanCts.Token, isDecline);
+            }
 
             // 显示结果
             _allScanResults = results;
