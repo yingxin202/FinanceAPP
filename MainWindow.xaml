@@ -214,6 +214,10 @@
                                       Foreground="#CDD6F4" FontSize="13" Margin="0,0,16,0"
                                       Cursor="Hand" Click="Option_Changed"
                                       ToolTip="沿X轴镜像翻转K线图（Y轴反向）"/>
+                            <CheckBox x:Name="GoldPricing" Content="黄金计价"
+                                      Foreground="#F9E2AF" FontSize="13" Margin="0,0,16,0"
+                                      Cursor="Hand" Click="GoldPricing_Changed"
+                                      ToolTip="以黄金ETF(518880)收盘价为计价单位，分析股票与黄金的比价关系"/>
                             <TextBlock Text="趋势线:" Foreground="#CDD6F4" FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0"/>
                             <ComboBox x:Name="TrendMethod" FontSize="13" MinWidth="90"
                                       Background="#313244" Foreground="#CDD6F4" BorderBrush="#45475A"
@@ -479,21 +483,83 @@
 
                 <!-- 参数面板 -->
                 <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8">
-                    <TextBlock Text="扫描日期:" Foreground="#CDD6F4" FontSize="14"
+                    <TextBlock Text="扫描模式:" Foreground="#CDD6F4" FontSize="14"
                                VerticalAlignment="Center" Margin="0,0,6,0"/>
-                    <DatePicker x:Name="ScanDatePicker" FontSize="14" Padding="4,4" Width="135"
-                                Background="#313244" Foreground="#CDD6F4" BorderBrush="#45475A"
-                                ToolTip="选择要扫描的交易日"/>
-                    <TextBlock Text="量比≥" Foreground="#CDD6F4" FontSize="14"
-                               VerticalAlignment="Center" Margin="16,0,6,0"/>
-                    <TextBox x:Name="ScanVolRatioInput" Text="2.0" FontSize="14" Padding="6,4" Width="60"
-                             Background="#313244" Foreground="#CDD6F4" BorderBrush="#45475A"/>
-                    <TextBlock Text="涨幅≥" Foreground="#CDD6F4" FontSize="14"
-                               VerticalAlignment="Center" Margin="16,0,6,0"/>
-                    <TextBox x:Name="ScanPriceChgInput" Text="5.0" FontSize="14" Padding="6,4" Width="60"
-                             Background="#313244" Foreground="#CDD6F4" BorderBrush="#45475A"/>
-                    <TextBlock Text="%" Foreground="#CDD6F4" FontSize="14"
-                               VerticalAlignment="Center" Margin="2,0,0,0"/>
+                    <ComboBox x:Name="ScanModeCombo" FontSize="14" Padding="6,4" Width="100"
+                              Background="#313244" Foreground="#CDD6F4" BorderBrush="#45475A"
+                              SelectionChanged="ScanMode_Changed">
+                        <ComboBoxItem Content="量价齐升" IsSelected="True"/>
+                        <ComboBoxItem Content="量价平稳"/>
+                        <ComboBoxItem Content="量价齐跌"/>
+                        <ComboBoxItem Content="区间涨跌"/>
+                    </ComboBox>
+
+                    <!-- 单日期模式（齐升/平稳/齐跌共用） -->
+                    <StackPanel x:Name="ScanDateParams" Orientation="Horizontal">
+                        <TextBlock Text="扫描日期:" Foreground="#CDD6F4" FontSize="14"
+                                   VerticalAlignment="Center" Margin="16,0,6,0"/>
+                        <DatePicker x:Name="ScanDatePicker" FontSize="14" Padding="4,4" Width="135"
+                                    Background="#313244" Foreground="#CDD6F4" BorderBrush="#45475A"
+                                    ToolTip="选择要扫描的交易日"/>
+                    </StackPanel>
+
+                    <!-- 区间涨跌参数 -->
+                    <StackPanel x:Name="RangeParams" Orientation="Horizontal" Visibility="Collapsed">
+                        <TextBlock Text="起始日期:" Foreground="#CDD6F4" FontSize="14"
+                                   VerticalAlignment="Center" Margin="16,0,6,0"/>
+                        <DatePicker x:Name="RangeStartDatePicker" FontSize="14" Padding="4,4" Width="135"
+                                    Background="#313244" Foreground="#CDD6F4" BorderBrush="#45475A"
+                                    ToolTip="区间起始日期"/>
+                        <TextBlock Text="终止日期:" Foreground="#CDD6F4" FontSize="14"
+                                   VerticalAlignment="Center" Margin="16,0,6,0"/>
+                        <DatePicker x:Name="RangeEndDatePicker" FontSize="14" Padding="4,4" Width="135"
+                                    Background="#313244" Foreground="#CDD6F4" BorderBrush="#45475A"
+                                    ToolTip="区间终止日期"/>
+                        <ComboBox x:Name="RangeDirectionCombo" FontSize="14" Padding="6,4" Width="80"
+                                  Background="#313244" Foreground="#CDD6F4" BorderBrush="#45475A"
+                                  Margin="16,0,6,0"
+                                  ToolTip="涨幅=搜索区间大涨的股票，跌幅=搜索区间大跌的股票">
+                            <ComboBoxItem Content="涨幅≥" IsSelected="True"/>
+                            <ComboBoxItem Content="跌幅≥"/>
+                        </ComboBox>
+                        <TextBox x:Name="RangeChgInput" Text="20" FontSize="14" Padding="6,4" Width="60"
+                                 Background="#313244" Foreground="#CDD6F4" BorderBrush="#45475A"/>
+                        <TextBlock Text="%" Foreground="#CDD6F4" FontSize="14"
+                                   VerticalAlignment="Center" Margin="2,0,0,0"/>
+                    </StackPanel>
+
+                    <!-- 量价齐升参数 -->
+                    <StackPanel x:Name="SurgeParams" Orientation="Horizontal">
+                        <TextBlock Text="量比≥" Foreground="#CDD6F4" FontSize="14"
+                                   VerticalAlignment="Center" Margin="16,0,6,0"/>
+                        <TextBox x:Name="ScanVolRatioInput" Text="2.0" FontSize="14" Padding="6,4" Width="60"
+                                 Background="#313244" Foreground="#CDD6F4" BorderBrush="#45475A"/>
+                        <TextBlock x:Name="SurgePriceChgLabel" Text="涨幅≥" Foreground="#CDD6F4" FontSize="14"
+                                   VerticalAlignment="Center" Margin="16,0,6,0"/>
+                        <TextBox x:Name="ScanPriceChgInput" Text="5.0" FontSize="14" Padding="6,4" Width="60"
+                                 Background="#313244" Foreground="#CDD6F4" BorderBrush="#45475A"/>
+                        <TextBlock Text="%" Foreground="#CDD6F4" FontSize="14"
+                                   VerticalAlignment="Center" Margin="2,0,0,0"/>
+                    </StackPanel>
+
+                    <!-- 量价平稳参数 -->
+                    <StackPanel x:Name="StableParams" Orientation="Horizontal" Visibility="Collapsed">
+                        <TextBlock Text="观察天数:" Foreground="#CDD6F4" FontSize="14"
+                                   VerticalAlignment="Center" Margin="16,0,6,0"/>
+                        <TextBox x:Name="ScanDaysInput" Text="5" FontSize="14" Padding="6,4" Width="40"
+                                 Background="#313244" Foreground="#CDD6F4" BorderBrush="#45475A"/>
+                        <TextBlock Text="波动率≤" Foreground="#CDD6F4" FontSize="14"
+                                   VerticalAlignment="Center" Margin="16,0,6,0"/>
+                        <TextBox x:Name="ScanFluctuationInput" Text="10" FontSize="14" Padding="6,4" Width="50"
+                                 Background="#313244" Foreground="#CDD6F4" BorderBrush="#45475A"/>
+                        <TextBlock Text="%" Foreground="#CDD6F4" FontSize="14"
+                                   VerticalAlignment="Center" Margin="2,0,0,0"/>
+                        <TextBlock Text="量比≤" Foreground="#CDD6F4" FontSize="14"
+                                   VerticalAlignment="Center" Margin="16,0,6,0"/>
+                        <TextBox x:Name="ScanVolRatioMaxInput" Text="1.0" FontSize="14" Padding="6,4" Width="50"
+                                 Background="#313244" Foreground="#CDD6F4" BorderBrush="#45475A"/>
+                    </StackPanel>
+
                     <Button x:Name="ScanStartBtn" Content="🔍 开始扫描" FontSize="14" Padding="16,6"
                             Margin="16,0,0,0" Background="#89B4FA" Foreground="#1E1E2E"
                             FontWeight="Bold" BorderThickness="0" Cursor="Hand"
